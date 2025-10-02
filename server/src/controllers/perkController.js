@@ -67,18 +67,43 @@ export async function createPerk(req, res, next) {
     next(err);
   }
 }
-// TODO
 // Update an existing perk by ID and validate only the fields that are being updated 
 export async function updatePerk(req, res, next) {
-  
-}
-
-
-// Delete a perk by ID
-export async function deletePerk(req, res, next) {
   try {
-    const doc = await Perk.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Perk not found' });
-    res.json({ ok: true });
-  } catch (err) { next(err); }
+    // First find the existing perk
+    const perk = await Perk.findById(req.params.id);
+    if (!perk) {
+      return res.status(404).json({ message: 'Perk not found' });
+    }
+
+    // Create a validation schema only for the fields being updated
+    const updateValidation = {};
+    if (req.body.title !== undefined) updateValidation.title = Joi.string().min(2);
+    if (req.body.description !== undefined) updateValidation.description = Joi.string().allow('');
+    if (req.body.category !== undefined) updateValidation.category = Joi.string().valid('food','tech','travel','fitness','other');
+    if (req.body.discountPercent !== undefined) updateValidation.discountPercent = Joi.number().min(0).max(100);
+    if (req.body.merchant !== undefined) updateValidation.merchant = Joi.string().allow('');
+
+    // Validate only the fields being updated
+    const updateSchema = Joi.object(updateValidation);
+    const { error } = updateSchema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.message });
+
+    // Apply updates to perk document
+    if (req.body.title !== undefined) perk.title = req.body.title;
+    if (req.body.description !== undefined) perk.description = req.body.description;
+    if (req.body.category !== undefined) perk.category = req.body.category;
+    if (req.body.discountPercent !== undefined) perk.discountPercent = req.body.discountPercent;
+    if (req.body.merchant !== undefined) perk.merchant = req.body.merchant;
+
+    // Save the updated perk
+    await perk.save();
+
+    res.json({ perk });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'Duplicate perk for this merchant' });
+    }
+    next(err);
+  }
 }
